@@ -3,18 +3,20 @@
 
 	var Game = (function(){
 
-		var REFRESH_RATE = 0.75;
+		var REFRESH_RATE = 1;
 		var GRAVITY = -0.5;
 		var FRICTION = 0.16;
 		var SPEED_MOVE = 0.19;
-		var SPEED_JUMP = 3.6;
+		var SPEED_JUMP = 3.8;
 		var EXIT = false;
-		var LIVES = 10;
+		var LIVES = 3;
+		var LEVEL = 1;
+		var KEYS = [27, 37, 39, 32];
 
 		var Game = function(selector){
 			this.canvas = d3.select(selector);
-			this.width = this.canvas[0][0].offsetWidth;
-			this.height = this.canvas[0][0].offsetHeight;
+			this.width = this.canvas[0][0].offsetWidth || this.canvas[0][0].parentNode.clientWidth;
+			this.height = this.canvas[0][0].offsetHeight || this.canvas[0][0].parentNode.clientHeight;
 			this.nodes = this.getInitialNodes('.node');
 			this.enemies = [this.createEnemy()];
 			this.keys = {};
@@ -106,7 +108,7 @@
 				});
 		}
 
-		function tickCollision(selection, enemies){
+		function tickCollision(selection, enemies, callback){
 			selection
 				.each(function(d){
 					var hits = enemies
@@ -121,12 +123,8 @@
 							  && e.position[1] - e.size*0.5 <= top;
 						});
 
-					if (hits.length > 0){
-						LIVES -= 1;
-
-						if (LIVES === 0){
-							EXIT = true;
-						}
+					if (hits.length > 0 && callback){
+						callback(hits);
 					}
 				});
 		}
@@ -138,8 +136,14 @@
 						id: elem[0].id,
 						velocity: [0, 0],
 						position: [0, 0],
-						initial: position(elem[0]),
-						dimensions: dimensions(elem[0])
+
+						// precomputed for FF
+						// initial: position(elem[0]),
+						initial: [-10.761391639709473, 29.352317810058594],
+
+						// precomputed for FF
+						// dimensions: dimensions(elem[0])
+						dimensions: [116.8009033203125, 93.04519653320312],
 					}
 				});
 		}
@@ -168,10 +172,16 @@
 			var self = this;
 			d3.select("body")
 				.on("keydown", function(){
-					self.keys[d3.event.keyCode] = true;
+					if (KEYS.indexOf(d3.event.keyCode) !== -1) {
+						self.keys[d3.event.keyCode] = true;
+						d3.event.preventDefault();
+					}
 				})
 				.on("keyup", function() {
-					self.keys[d3.event.keyCode] = false;
+					if (KEYS.indexOf(d3.event.keyCode) !== -1) {
+						self.keys[d3.event.keyCode] = false;
+						d3.event.preventDefault();
+					}
 				});
 		};
 
@@ -264,14 +274,27 @@
 				})
 
 			labelJoin
-				.text(function(d){ return d; });
+				.text(LEVEL);
 
 			this.canvas.selectAll(".node")
 				.data(this.nodes)
 				.call(tickGravity)
 				.call(tickFriction)
 				.call(tickPosition, dt*REFRESH_RATE)
-				.call(tickCollision, this.enemies)
+				.call(tickCollision, this.enemies, function(hits){
+					hits.forEach(function(hit){
+						var index = self.enemies.indexOf(hit);
+						if (index !== -1){
+							self.enemies.splice(index, 1);
+						}
+					});
+
+					LIVES -= 1;
+
+					if (LIVES === 0){
+						EXIT = true;
+					}
+				})
 				.call(tickLeftRightStop, this.width)
 				.call(tickBottomBorder, this.height);
 
@@ -295,14 +318,20 @@
 				.call(tickLeftRightBounce, this.width)
 				.call(tickBottomBorder, this.height);
 
-			enemiesJoin
-				.exit()
-				.remove()
-
 			this.canvas.selectAll(".node, .enemy")
 				.data([].concat(this.nodes, this.enemies))
 				.attr('transform', function(d){
 					return "translate(" + d.position[0] + "," + -d.position[1] + ") scale(" + (Math.sign(d.velocity[0])||1) + ",1)";
+				});
+
+			enemiesJoin
+				.exit()
+				.transition()
+				.duration(2500)
+				.ease('cubicout')
+				.attr('transform', 'translate (' + self.width*0.5 + ', 10000) scale(1,1)')
+				.each('end', function(d){
+					d3.select(this).remove();
 				});
 
 			var livesJoin = this.canvas.selectAll(".lives")
@@ -326,11 +355,17 @@
 
 			livesJoin
 				.exit()
-				.remove();
+				.transition()
+				.duration(1000)
+				.attr('opacity', 0)
+				.each('end', function(d){
+					d3.select(this).remove();
+				});
 
 			if (t > this.freq){
 				this.enemies.push(this.createEnemy());
 				this.freq = this.freq + this.freq * Math.random();
+				LEVEL += 1;
 			}
 
 			this.t = t;
