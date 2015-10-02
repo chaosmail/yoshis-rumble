@@ -11,6 +11,7 @@
 		var EXIT = false;
 		var LIVES = 3;
 		var LEVEL = 1;
+		var COUNT_ENEMIES = 0;
 		var KEYS = [27, 37, 39, 32];
 
 		var Game = function(selector){
@@ -153,7 +154,10 @@
 			var size = Math.max(Math.random()*20, 5);
 			var velocity = Math.random();
 
+			COUNT_ENEMIES += 1;
+
 			return {
+				id: COUNT_ENEMIES,
 				velocity: [-velocity, 0],
 				position: [this.width - size, 0],
 				initial: [0, 0],
@@ -296,10 +300,15 @@
 					}
 				})
 				.call(tickLeftRightStop, this.width)
-				.call(tickBottomBorder, this.height);
+				.call(tickBottomBorder, this.height)
+				.attr('transform', function(d){
+					return "translate(" + d.position[0] + "," + -d.position[1] + ") scale(" + (Math.sign(d.velocity[0])||1) + ",1)";
+				});
 
 			var enemiesJoin = this.canvas.selectAll(".enemy")
-				.data(this.enemies)
+				.data(this.enemies, function(d){
+					return d.id;
+				});
 
 			enemiesJoin
 				.enter()
@@ -316,10 +325,7 @@
 				.call(tickGravity)
 				.call(tickPosition, dt*REFRESH_RATE)
 				.call(tickLeftRightBounce, this.width)
-				.call(tickBottomBorder, this.height);
-
-			this.canvas.selectAll(".node, .enemy")
-				.data([].concat(this.nodes, this.enemies))
+				.call(tickBottomBorder, this.height)
 				.attr('transform', function(d){
 					return "translate(" + d.position[0] + "," + -d.position[1] + ") scale(" + (Math.sign(d.velocity[0])||1) + ",1)";
 				});
